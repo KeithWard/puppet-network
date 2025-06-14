@@ -91,7 +91,6 @@ describe Puppet::Provider::Iproute::Iproute do
       allow(provider).to receive(:requires_replacement?).and_return(true)
       allow(provider).to receive(:delete).once
       allow(provider).to receive(:create).once
-      allow(Puppet::Util::Execution).to receive(:execute).and_return(true)
       provider.update(context, '10.0.0.0/24', should)
       expect(provider).to have_received(:delete).with(context, '10.0.0.0/24')
       expect(provider).to have_received(:create).with(context, '10.0.0.0/24', should)
