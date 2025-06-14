@@ -1,0 +1,326 @@
+# frozen_string_literal: true
+
+require 'puppet/resource_api'
+
+Puppet::ResourceApi.register_type(
+  name: 'nm_connection',
+  docs: <<-EOS,
+@summary a nm_connection type
+@example
+# With a DHCP Address
+nm_connection { 'eth0':
+  ensure => 'present',
+  device => 'eth0',
+  type   => 'ethernet',
+  autoconnect => true,
+  autoconnect_priority => 0,
+  ipv4_method => 'auto',
+  ipv6_method => 'auto',
+  ipv6_addr_gen mode => 'stable-privacy',
+}
+  @example
+# With a Static Address
+nm_connection { 'eth0':
+  ensure => 'present',
+  device => 'eth0',
+  type   => 'ethernet',
+  autoconnect => true,
+  autoconnect_priority => 0,
+  ipv4_addresses => '192.168.1.4/24',
+  ipv4_gateway => '192.168.1.1',
+}
+  @example
+# With a Bond Connection
+nm_connection { 'bond0':
+  ensure => 'present',
+  type   => 'bond',
+  device => 'bond0',
+  autoconnect => true,
+  bond_mode => 'active-backup',
+  bond_primary => 'eth0',
+  bond_primary_reselect => 'failure',
+  ipv4_method => 'manual',
+  ipv4_addresses => '192.168.2.2/24',
+  ipv4_gateway => '192.168.2.1',
+  autoconnect_ports => true,
+  }
+  
+  nm_connection { 'eth0':
+    ensure => 'present',
+    device => 'eth0',
+    type   => 'ethernet',
+    master => 'bond0',
+    slave_type => 'bond',
+    autoconnect => true,
+  }
+  nm_connection { 'eth1':
+    ensure => 'present',
+    device => 'eth1',
+    type   => 'ethernet',
+    master => 'bond0',
+    slave_type => 'bond',
+    autoconnect => true,
+  }
+    @example
+# With a Bridge Connection
+nm_connection { 'br0':
+  ensure => 'present',
+  type   => 'bridge',
+  device => 'br0', 
+  autoconnect => true,
+  ipv4_method => 'manual',
+  ipv4_addresses => '192.168.3.2/24',
+  ipv4_gateway => '192.168.3.1',
+  autoconnect_ports => true,
+  }
+  nm_connection { 'eth0':
+    ensure => 'present',
+    device => 'eth0',
+    type   => 'ethernet',
+    master => 'br0',
+    slave_type => 'bridge',
+    autoconnect => true,
+  }
+  nm_connection { 'eth1':
+    ensure => 'present',
+    device => 'eth1',
+    type   => 'ethernet',
+    master => 'br0',  
+    slave_type => 'bridge',
+    autoconnect => true,
+  }
+  @example
+# With a VLAN Connection
+nm_connection { 'vlan10':
+  ensure => 'present',
+  type   => 'vlan',
+  device => 'vlan10',
+  vlan_id => 10,
+  vlan_parent => 'eth0',
+  autoconnect => true,
+  ipv4_method => 'manual',
+  ipv4_addresses => '192.168.10.2/24',
+  ipv4_gateway => '192.168.10.1',
+  ipv4_dns => ['192.168.10.1'],
+  ipv6_method => 'disabled',
+  ipv6_addr_gen_mode => 'stable-privacy',
+  }
+@example
+# To remove a connection
+nm_connection { 'eth0':
+  ensure => 'absent',
+}
+
+This type provides Puppet with the capabilities to manage connections via NetworkManager.
+
+**Autorequires**:
+* `Package['NetworkManager']` - This type requires the NetworkManager package to be installed.
+EOS
+  features: [],
+  attributes: {
+    ensure: {
+      type: 'Enum[present, absent]',
+      desc: 'Whether this resource should be present or absent on the target system.',
+      default: 'present',
+    },
+    name: {
+      type: 'String',
+      desc: 'The name of the connection. (this will be used as the connection id)',
+      behaviour: :namevar,
+    },
+    type: {
+      type: 'Enum[`ethernet`, `bridge`, `bond`, `vlan`],',
+      desc: 'The type of the connection. supported values are currently `ethernet`, `bridge`, `bond`, `vlan`',
+      default: 'ethernet',
+    },
+    device: {
+      type: 'Optional[String]',
+      desc: 'The device name for the connection. This is typically the network interface name like `eth0`, `enp0s3`, etc.',
+      default: nil,
+    }, 
+    slave_type: {
+      type: 'Optional[Enum[`ethernet`, `bridge`, `bond`, `vlan`]]',
+      desc: 'The type of the slave connection. Required for bridge or bond connections, to specify the type of the slave device. If ommitted pupppet will try to guess the type based on the device name.',
+      default: nil,
+    },
+    master: {
+      type: 'Optional[String]',
+      desc: 'The master device for the connection. This is typically used for bridge or bond connections to specify the master device.',
+      default: nil,
+    }
+    # Readonly attributes
+    # These attributes are managed by NetworkManager and should not be set manually.
+    # They are included here for completeness and to provide information about the connection. 
+    timestamp: {
+      type: 'Optional[Integer]',
+      desc: 'The timestamp of the connection. This is typically used for tracking when the connection was created or modified.',
+      default: nil,
+      readonly: true,
+    }
+    connection_id: {
+      type: 'Optional[String]',
+      desc: 'The unique identifier for the connection. This is typically a UUID or a unique name.',
+      default: nil,
+      readonly: true,
+    }
+    connection_uuid: {
+      type: 'Optional[String]',
+      desc: 'A unique identifier for the connection, typically a UUID. This should not be set manually as it is generated by NetworkManager.',
+      default: nil,
+      readonly: true,
+    }
+    # General connection settings
+    autoconnect: {
+      type: 'Boolean',
+      desc: 'Whether the connection should automatically connect on boot.',
+      default: true,
+    },
+    autoconnect_priority: {
+      type: 'Optional[Integer]',
+      desc: 'The priority of the connection for autoconnect. Higher values mean higher priority.',  
+      default: 0,
+    },
+    autoconnect_ports: {
+      type: 'Optional[Boolean]',
+      desc: 'Whether to autoconnect the connection on specific ports. This is typically used for bridge connections to specify which ports to include in the bridge.',
+      default: false,
+    },
+    autoconnect_retries: {
+      type: 'Optional[Integer]',
+      desc: 'The number of retries for autoconnecting the connection.', 
+      default: 0,
+    }
+    lldp: {
+      type: 'Optional[Boolean]',
+      desc: 'Whether to enable Link Layer Discovery Protocol (LLDP) for the connection.', 
+      default: nil
+    },
+    mtu: {
+      type: 'Optional[Integer]',
+      desc: 'The Maximum Transmission Unit (MTU) for the connection.',
+    }
+    # IPV4 configuration
+    ipv4_method: {
+      type: 'Enum[manual, auto, link-local, disabled]',
+      desc: 'IPv4 configuration method. Valid values are `manual`, `auto`, `link-local`, and `disabled',
+      default: 'manual',
+    },
+    ipv4_addresses: {
+      type: 'Optional[Variant[Stdlib::IP::Address::V4::CIDR,Array[Stdlib::IP::Address::V4::CIDR]]]',
+      desc: 'The IPv4 address of the connection either a single or an array for multiple addresses.',
+      default: nil
+    }
+    ipv4_gateway: {
+      type: 'Optional[Stdlib::IP::Address::V4::Nosubnet]',
+      desc: 'The IPv4 gateway for the connection, either a single or an array for multiple gateways.',
+      default: nil
+    },
+    ipv4_dns: {
+      type: 'Optional[Array[Stdlib::IP::Address::V4]]',
+      desc: 'The IPv4 DNS servers for the connection, either a single or an array for multiple DNS servers.',
+      default: []
+    },
+    ipv4_routes: {
+      type: 'Optional[Array[Hash]]',
+      desc: 'An array of IPv4 routes for the connection. Each route is a hash with keys like `destination`, `gateway`, and `metric`.',
+      default: [],  
+    }
+    ipv4_dns_search: {
+      type: 'Optional[Array[Stdlib::DNS::Zone]]',
+      desc: 'An array of search domains for the IPv4 DNS configuration.',
+      default: [],
+    },
+
+    # IPV6 configuration
+    ipv6_method: {
+      type: 'Enum[auto, manual, link-local, disabled]',
+      desc: 'IPv6 configuration method. Valid values are `auto`, `manual`, `link-local`, and `disabled`.',
+      default: 'auto',
+    },
+    ipv6_addresses: {
+      type: 'Optional[Variant[Stdlib::IP::Address::V6::CIDR,Array[Stdlib::IP::Address::V6::CIDR]]]',
+      desc: 'The IPv6 address of the connection either a single or an array for multiple addresses.',
+      default: nil,
+    },
+    ipv6_gateway: {
+      type: 'Optional[Stdlib::IP::Address::V6::Nosubnet]',
+      desc: 'The IPv6 gateway for the connection, either a single or an array for multiple gateways.',
+      default: nil,
+    },
+    ipv6_dns: {
+      type: 'Optional[Array[Stdlib::IP::Address::V6]]',
+      desc: 'The IPv6 DNS servers for the connection, either a single or an array for multiple DNS servers.',
+      default: nil,
+    },
+    ipv6_dns_search: {
+      type: 'Optional[Array[Stdlib::DNS::Zone]]',
+      desc: 'An array of search domains for the IPv6 DNS configuration.',
+      default: nil,
+    },
+    ipv6_routes: {
+      type: 'Optional[Array[Hash]]',
+      desc: 'An array of IPv6 routes for the connection. Each route is a hash with keys like `destination`, `gateway`, and `metric`.',
+      default: nil,
+    },
+    ipv6_addr_gen_mode: {
+      type: 'Optional[Enum[stable-privacy, eui64]]',
+      desc: 'IPv6 address generation mode. Valid values are `stable-privacy` and `eui64`.',
+      default: 'stable-privacy',
+    },
+    # Bonding configuration
+    bond_miimon: {
+      type: 'Optional[Integer]',
+      desc: 'The MII monitoring interval in milliseconds for the bond connection.',
+      default: 100,
+    },
+    bond_updelay: {
+      type: 'Optional[Integer]',
+      desc: 'The delay before enabling a link after it becomes up, in milliseconds.',
+      default: 200,
+    },
+    bond_downdelay: {
+      type: 'Optional[Integer]',
+      desc: 'The delay before disabling a link after it becomes down, in milliseconds.',
+      default: 200,
+    },
+    bond_mode: {
+      type: 'Optional[Enum[balance-rr, active-backup, balance-xor, broadcast, 802.3ad, balance-tlb, balance-alb]]', 
+      desc: 'The bonding mode for the connection. Valid values are `balance-rr`, `active-backup`, `balance-xor`, `broadcast`, `802.3ad`, `balance-tlb`, and `balance-alb`.',
+      default: 'balance-rr',
+    },
+    bond_primary: {
+      type: 'Optional[String]',
+      desc: 'The primary device for the bond connection. This is typically the device that will be used as the primary link in the bond.',
+      default: nil,
+    },
+    bond_primary_reselect: {
+      type: 'Optional[Enum[always, failure]]',
+      desc: 'The primary reselect policy for the bond connection. Valid values are `always` and `failure`.',
+      default: 'failure',
+    },
+    bond_xmit_hash_policy: {
+      type: 'Optional[Enum[l2, layer2+3, layer2+4, 3, 4]]',
+      desc: 'The transmit hash policy for the bond connection. Valid values are `l2`, `layer2+3`, `layer2+4`, `3`, and `4`.',
+      default: 'layer2+3',
+    },
+    bond_fail_over_mac: {
+      type: 'Optional[Enum[none, active, follow]]',
+      desc: 'The failover MAC policy for the bond connection. Valid values are `none`, `active`, and `follow`.',
+      default: 'none',
+    },
+    bond_lacp_rate: {
+      type: 'Optional[Enum[slow, fast]]',
+      desc: 'The LACP rate for the bond connection. Valid values are `slow` and `fast`.',
+      default: 'slow',
+    },
+    # VLAN configuration
+    vlan_id: {
+      type: 'Optional[Integer]',
+      desc: 'The VLAN ID for the connection.',
+    },
+    vlan_parent: {
+      type: 'Optional[String]',
+      desc: 'The parent device for the VLAN connection.',
+    },
+  }
+)
