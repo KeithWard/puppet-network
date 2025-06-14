@@ -5,14 +5,14 @@ require 'puppet/provider/iproute/iproute'
 
 describe Puppet::Provider::Iproute::Iproute do
   let(:provider) { described_class.new }
-  let(:context) { double('context', debug: nil) }
+  let(:context) { instance_double('context', debug: nil) }
 
   describe '#get' do
     it 'returns an array of route hashes from route_exec' do
       # Random Assortment of routes to simulate the output of `route show table all`
       routes = [
         { 'dst' => 'default', 'gateway' => '172.26.176.1', 'dev' => 'eth0', 'protocol' => 'kernel', 'flags' => [] },
-        { 'dst' => '172.17.0.0/16', 'dev' => 'docker0', 'protocol' => 'kernel', 'scope' => 'link', 'prefsrc' => '172.17.0.1', 'flags' => [] },
+        { 'dst' => '172.17.0.0/16', 'dev' => 'docker0', 'protocol' => 'kernel', 'scopeq' => 'link', 'prefsrc' => '172.17.0.1', 'flags' => [] },
         { 'dst' => '172.26.176.0/20', 'dev' => 'eth0', 'protocol' => 'kernel', 'scope' => 'link', 'prefsrc' => '172.26.191.92', 'flags' => [] },
         { 'type' => 'local', 'dst' => '10.255.255.254', 'dev' => 'lo', 'table' => 'local', 'protocol' => 'kernel', 'scope' => 'host', 'prefsrc' => '10.255.255.254', 'flags' => [] },
         { 'type' => 'broadcast', 'dst' => '10.255.255.254', 'dev' => 'lo', 'table' => 'local', 'protocol' => 'kernel', 'scope' => 'link', 'prefsrc' => '10.255.255.254', 'flags' => [] },
@@ -34,7 +34,7 @@ describe Puppet::Provider::Iproute::Iproute do
         { 'type' => 'multicast', 'dst' => 'ff00::/8', 'dev' => 'veth0518f99', 'table' => 'local', 'protocol' => 'kernel', 'metric' => 256, 'flags' => [], 'pref' => 'medium' },
         { 'type' => 'multicast', 'dst' => 'ff00::/8', 'dev' => 'docker0', 'table' => 'local', 'protocol' => 'kernel', 'metric' => 256, 'flags' => [], 'pref' => 'medium' }
       ]
-      expect(provider).to receive(:route_exec).with(context, %w[route show table all]).and_return(routes)
+      allow(provider).to receive(:route_exec).with(context, %w[route show table all]).and_return(routes)
       # { 'metric' => 256, 'flags' => [], 'pref' => 'medium' }
       result = provider.get(context)
       expect(result.first[:prefix]).to eq('default')
@@ -77,37 +77,42 @@ describe Puppet::Provider::Iproute::Iproute do
   describe '#create' do
     it 'calls route_exec with add and parsed args' do
       should = { prefix: 'default', via: '192.168.1.1', table: 'main' }
-      expect(provider).to receive(:parse_route).with(should).and_return(['default', 'via', '192.168.1.1', 'table', 'main'])
-      expect(provider).to receive(:route_exec).with(context, ['route', 'add', 'default', 'via', '192.168.1.1', 'table', 'main'])
+      allow(provider).to receive(:parse_route).with(should).and_return(['default', 'via', '192.168.1.1', 'table', 'main'])
+      allow(provider).to receive(:route_exec).with(context, ['route', 'add', 'default', 'via', '192.168.1.1', 'table', 'main'])
       provider.create(context, 'foo', should)
+      expect(provider).to have_received(:route_exec).with(context, ['route', 'add', 'default', 'via', '192.168.1.1', 'table', 'main'])
     end
   end
 
   describe '#update' do
     it 'calls delete and create if replacement is required' do
-      should = { prefix: '10.0.0.0/24' }
-      provider.instance_variable_set(:@current_state, { '10.0.0.0/24' => { prefix: '10.0.0.0/24' } })
-      expect(provider).to receive(:requires_replacement?).and_return(true)
-      expect(provider).to receive(:delete).with(context, '10.0.0.0/24')
-      expect(provider).to receive(:create).with(context, '10.0.0.0/24', should)
+      should = { prefix: '10.0.0.0/24', via: '192.168.0.2' }
+      provider.instance_variable_set(:@current_state, { '10.0.0.0/24' => { prefix: '10.0.0.0/24', via: '192.168.0.1' } })
+      allow(provider).to receive(:requires_replacement?).and_return(true)
+      allow(provider).to receive(:delete).once
+      allow(provider).to receive(:create).once
+      allow(Puppet::Util::Execution).to receive(:execute).and_return(true)
       provider.update(context, '10.0.0.0/24', should)
+      expect(provider).to have_received(:delete).with(context, '10.0.0.0/24')
+      expect(provider).to have_received(:create).with(context, '10.0.0.0/24', should)
     end
 
     it 'calls route_exec with change if no replacement is required' do
-      should = { prefix: '10.0.0.0/24' }
-      provider.instance_variable_set(:@current_state, { '10.0.0.0/24' => { prefix: '10.0.0.0/24' } })
-      expect(provider).to receive(:requires_replacement?).and_return(false)
-      expect(provider).to receive(:parse_route).with(should).and_return(%w[dev eth0])
-      expect(provider).to receive(:route_exec).with(context, %w[route change dev eth0])
+      should = { prefix: '10.0.0.0/24', via: '192.168.0.3', dev: 'eth0'  }
+      provider.instance_variable_set(:@current_state, { '10.0.0.0/24' => { prefix: '10.0.0.0/24', via: '192.168.0.1', dev: 'eth1' } })
+      allow(provider).to receive(:requires_replacement?).and_return(false)
+      allow(provider).to receive(:route_exec).with(context, %w[route change 10.0.0.0/24 via 192.168.0.3 dev eth0])
       provider.update(context, '10.0.0.0/24', should)
+      expect(provider).to have_received(:route_exec).with(context, %w[route change 10.0.0.0/24 via 192.168.0.3 dev eth0])
     end
   end
 
   describe '#delete' do
     it 'calls route_exec with del and table option' do
-      provider.instance_variable_set(:@current_state, { '10.0.0.0/24' => { prefix: '10.0.0.0/24', table: 'main' } })
-      expect(provider).to receive(:route_exec).with(context, ['route', 'del', '10.0.0.0/24', 'table', 'main'])
+      provider.instance_variable_set(:@current_state, { '10.0.0.0/24' => { prefix: '10.0.0.0/24', via: '192.168.0.1', table: 'main' } })
+      allow(provider).to receive(:route_exec).with(context, ['route', 'del', '10.0.0.0/24'])
       provider.delete(context, '10.0.0.0/24')
+      expect(provider).to have_received(:route_exec).with(context, %w[route del 10.0.0.0/24])
     end
   end
 
@@ -142,14 +147,17 @@ describe Puppet::Provider::Iproute::Iproute do
 
   describe '#valid_cidr?' do
     it 'returns true for default' do
+      allow(context).to receive(:warning).and_return('')
       expect(provider.valid_cidr?(context, 'default')).to be true
     end
 
     it 'returns true for valid CIDR' do
+      allow(context).to receive(:warning).and_return('')
       expect(provider.valid_cidr?(context, '10.0.0.0/24')).to be true
     end
 
     it 'returns false for invalid CIDR' do
+      allow(context).to receive(:warning).and_return('')
       expect(provider.valid_cidr?(context, 'invalid')).to be false
     end
   end

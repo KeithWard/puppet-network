@@ -66,9 +66,8 @@ class Puppet::Provider::Iproute::Iproute < Puppet::ResourceApi::SimpleProvider
       return
     end
     prefix = res[:prefix]
-    table =  res[:table]
-
-    args = ['route', 'del', prefix, 'table', table]
+    table =  ['table', res[:table]] if res[:table] && res[:table] != 'main'
+    args = ['route', 'del', prefix, table].compact
     route_exec(context, args)
   end
 
@@ -96,7 +95,11 @@ class Puppet::Provider::Iproute::Iproute < Puppet::ResourceApi::SimpleProvider
     begin
       context.debug("Validating CIDR: #{value}")
       IPAddr.new(value)
-    rescue IPAddr::InvalidAddressError, IPAddr::InvalidPrefixError
+    rescue IPAddr::InvalidPrefixError
+      context.warning("Invalid CIDR prefix: #{value}. Must be a valid CIDR or 'default'.")
+      return false
+    rescue IPAddr::InvalidAddressError
+      context.warning("Invalid CIDR format: #{value}. Must be a valid CIDR or 'default'.")
       return false
     end
     true
@@ -110,7 +113,7 @@ class Puppet::Provider::Iproute::Iproute < Puppet::ResourceApi::SimpleProvider
     iproute_path ||= Puppet::Util.which('ip')
     final_cmd = [iproute_path, '-json'] + args.flatten
     context.debug("Executing command: #{final_cmd.join(' ')}")
-    response = Puppet::Util::Execution.execute(final_cmd, failonfail: true)
+    Puppet::Util::Execution.execute(final_cmd, failonfail: true)
   rescue Puppet::ExecutionFailure => e
     # Surface the error as Pupper::Error with a more descriptive message to make failures easier to debug
     raise Puppet::Error, "Command '#{args.join(' ')}' failed: #{e.message}"
