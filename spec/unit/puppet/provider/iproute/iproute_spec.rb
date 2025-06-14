@@ -34,8 +34,8 @@ describe Puppet::Provider::Iproute::Iproute do
         { 'type' => 'multicast', 'dst' => 'ff00::/8', 'dev' => 'veth0518f99', 'table' => 'local', 'protocol' => 'kernel', 'metric' => 256, 'flags' => [], 'pref' => 'medium' },
         { 'type' => 'multicast', 'dst' => 'ff00::/8', 'dev' => 'docker0', 'table' => 'local', 'protocol' => 'kernel', 'metric' => 256, 'flags' => [], 'pref' => 'medium' }
       ]
-      expect(provider).to receive(:route_exec).with(context, ['route', 'show', 'table', 'all']).and_return(routes)
-              #{ 'metric' => 256, 'flags' => [], 'pref' => 'medium' }
+      expect(provider).to receive(:route_exec).with(context, %w[route show table all]).and_return(routes)
+      # { 'metric' => 256, 'flags' => [], 'pref' => 'medium' }
       result = provider.get(context)
       expect(result.first[:prefix]).to eq('default')
       expect(result.first[:table]).to eq('main')
@@ -47,12 +47,12 @@ describe Puppet::Provider::Iproute::Iproute do
       expect(result.last[:dev]).to eq('docker0')
       expect(result.last[:table]).to eq('local')
       expect(result.last[:proto]).to eq('kernel')
-      expect(result.last[:type]).to eq('multicast')     
+      expect(result.last[:type]).to eq('multicast')
       expect(result.last[:metric]).to eq(256)
       expect(result.last[:scope]).to be_nil
       expect(result.last[:src]).to be_nil
-      expect(result.last[:onlink]).to eq(false)
-      end
+      expect(result.last[:onlink]).to be(false)
+    end
   end
 
   describe '#parse_route' do
@@ -92,12 +92,13 @@ describe Puppet::Provider::Iproute::Iproute do
       expect(provider).to receive(:create).with(context, '10.0.0.0/24', should)
       provider.update(context, '10.0.0.0/24', should)
     end
+
     it 'calls route_exec with change if no replacement is required' do
       should = { prefix: '10.0.0.0/24' }
       provider.instance_variable_set(:@current_state, { '10.0.0.0/24' => { prefix: '10.0.0.0/24' } })
       expect(provider).to receive(:requires_replacement?).and_return(false)
-      expect(provider).to receive(:parse_route).with(should).and_return(['dev', 'eth0'])
-      expect(provider).to receive(:route_exec).with(context, ['route', 'change', 'dev', 'eth0'])
+      expect(provider).to receive(:parse_route).with(should).and_return(%w[dev eth0])
+      expect(provider).to receive(:route_exec).with(context, %w[route change dev eth0])
       provider.update(context, '10.0.0.0/24', should)
     end
   end
@@ -107,7 +108,6 @@ describe Puppet::Provider::Iproute::Iproute do
       provider.instance_variable_set(:@current_state, { '10.0.0.0/24' => { prefix: '10.0.0.0/24', table: 'main' } })
       expect(provider).to receive(:route_exec).with(context, ['route', 'del', '10.0.0.0/24', 'table', 'main'])
       provider.delete(context, '10.0.0.0/24')
-
     end
   end
 
@@ -118,17 +118,20 @@ describe Puppet::Provider::Iproute::Iproute do
       provider.canonicalize(context, resources)
       expect(resources.first[:prefix]).to eq('10.0.0.0/24')
     end
+
     it 'raises error for invalid prefix' do
       resources = [{ name: 'not_a_cidr' }]
       allow(provider).to receive(:valid_cidr?).and_return(false)
       expect { provider.canonicalize(context, resources) }.to raise_error(Puppet::Error)
     end
+
     it 'defaults table to main' do
       resources = [{ name: '10.0.0.0/24' }]
       allow(provider).to receive(:valid_cidr?).and_return(true)
       provider.canonicalize(context, resources)
       expect(resources.first[:table]).to eq('main')
     end
+
     it 'converts metric to integer' do
       resources = [{ name: '10.0.0.0/24', metric: '100' }]
       allow(provider).to receive(:valid_cidr?).and_return(true)
@@ -141,12 +144,13 @@ describe Puppet::Provider::Iproute::Iproute do
     it 'returns true for default' do
       expect(provider.valid_cidr?(context, 'default')).to be true
     end
+
     it 'returns true for valid CIDR' do
       expect(provider.valid_cidr?(context, '10.0.0.0/24')).to be true
     end
+
     it 'returns false for invalid CIDR' do
       expect(provider.valid_cidr?(context, 'invalid')).to be false
     end
   end
 end
-

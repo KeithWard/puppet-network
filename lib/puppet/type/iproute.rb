@@ -4,29 +4,29 @@ require 'puppet/resource_api'
 
 Puppet::ResourceApi.register_type(
   name: 'iproute',
-  docs: <<-EOS,
-@summary Manage IP routes using iproute2.
-@example Add a static route
-  iproute { '192.168.2.0/24': 
-    ensure => 'present',
-    via    => '192.168.1.1',
-    dev    => 'eth0',
-  }
-@example Add a route to a specific table
-iproute { 'default@100':
-    ensure => 'present',
-      prefix=> 'default',
-      via   => ' 192.168.1.1'
-      dev   => 'eth0',
-      table  => '100',
-    }
+  docs: <<~EOS,
+    @summary Manage IP routes using iproute2.
+    @example Add a static route
+      iproute { '192.168.2.0/24':#{' '}
+        ensure => 'present',
+        via    => '192.168.1.1',
+        dev    => 'eth0',
+      }
+    @example Add a route to a specific table
+    iproute { 'default@100':
+        ensure => 'present',
+          prefix=> 'default',
+          via   => ' 192.168.1.1'
+          dev   => 'eth0',
+          table  => '100',
+        }
 
 
-This type provides Puppet with the capabilities to manage routes using `iproute`.
+    This type provides Puppet with the capabilities to manage routes using `iproute`.
 
-**Autorequires**:
-* `Package[iproute2]`
-EOS
+    **Autorequires**:
+    * `Package[iproute2]`
+  EOS
   features: [],
   attributes: {
     ensure: {
@@ -63,7 +63,7 @@ EOS
     proto: {
       type: 'Optional[Variant[Enum["kernel", "boot", "static"],Integer]]',
       desc: 'The protocol the route belongs to.',
-    },    
+    },
     src: {
       type: 'Optional[Stdlib::IP::Address]',
       desc: 'The preferred source address for this route.',
@@ -76,5 +76,5 @@ EOS
       type: 'Optional[Enum[unicast, blackhole, unreachable, prohibit, local, broadcast, multicast, throw]]',
       desc: 'Route type.',
     },
-  },
+  }
 )

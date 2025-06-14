@@ -5,10 +5,9 @@ require 'json'
 require 'ipaddr'
 
 class Puppet::Provider::Iproute::Iproute < Puppet::ResourceApi::SimpleProvider
-
   def get(context)
     @current_state = {}
-    routes = route_exec(context, ['route', 'show', 'table', 'all'])
+    routes = route_exec(context, %w[route show table all])
     routes.map do |route|
       prefix = route['dst']
       table = route['table'] || 'main'
@@ -43,12 +42,11 @@ class Puppet::Provider::Iproute::Iproute < Puppet::ResourceApi::SimpleProvider
     args
   end
 
-  def create(context, name, should)
-    args = ['route', 'add']
+  def create(context, _name, should)
+    args = %w[route add]
     args += parse_route(should)
     route_exec(context, args)
   end
-
 
   def update(context, name, should)
     current = @current_state[name]
@@ -56,7 +54,7 @@ class Puppet::Provider::Iproute::Iproute < Puppet::ResourceApi::SimpleProvider
       delete(context, name)
       create(context, name, should)
     else
-      args = ['route', 'change']
+      args = %w[route change]
       route_exec(context, args + parse_route(should))
     end
   end
@@ -71,7 +69,7 @@ class Puppet::Provider::Iproute::Iproute < Puppet::ResourceApi::SimpleProvider
     table =  res[:table]
 
     args = ['route', 'del', prefix, 'table', table]
-    self.route_exec(context, args)
+    route_exec(context, args)
   end
 
   def canonicalize(context, resources)
@@ -79,11 +77,10 @@ class Puppet::Provider::Iproute::Iproute < Puppet::ResourceApi::SimpleProvider
       if res[:prefix].nil?
         # If we haven't specified an explicit prefix, then try and see if the name is a valid CIDR or 'default'.
         # if it is, then move that to prefix.
-        if res[:name] == 'default' || valid_cidr?(context, res[:name])
-          res[:prefix] = res[:name]
-        else
-          raise Puppet::Error, "Invalid prefix '#{res[:name]}'. Must be a valid CIDR or 'default'."
-        end
+        raise Puppet::Error, "Invalid prefix '#{res[:name]}'. Must be a valid CIDR or 'default'." unless res[:name] == 'default' || valid_cidr?(context, res[:name])
+
+        res[:prefix] = res[:name]
+
       end
       # If Table is not specified, default to 'main'
       res[:table] ||= 'main'
@@ -91,16 +88,18 @@ class Puppet::Provider::Iproute::Iproute < Puppet::ResourceApi::SimpleProvider
       res[:metric] = res[:metric].to_i if res[:metric]
     end
   end
+
   def valid_cidr?(context, value)
     # Accepts 'default' or CIDR like '10.0.0.0/24'
     return true if value == 'default'
+
     begin
       context.debug("Validating CIDR: #{value}")
       IPAddr.new(value)
-    rescue IPAddr::InvalidAddressError,  IPAddr::InvalidPrefixError
+    rescue IPAddr::InvalidAddressError, IPAddr::InvalidPrefixError
       return false
     end
-    return true
+    true
   end
 
   def requires_replacement?(is, should)
@@ -108,15 +107,12 @@ class Puppet::Provider::Iproute::Iproute < Puppet::ResourceApi::SimpleProvider
   end
 
   def route_exec(context, *args)
-    begin
-      iproute_path ||= Puppet::Util.which('ip')
-      final_cmd = [iproute_path, '-json'] + args.flatten
-      context.debug("Executing command: #{final_cmd.join(' ')}")
-      response = Puppet::Util::Execution.execute(final_cmd, failonfail: true)
-    rescue Puppet::ExecutionFailure => e
-      # Surface the error as Pupper::Error with a more descriptive message to make failures easier to debug
-      raise Puppet::Error, "Command '#{args.join(' ')}' failed: #{e.message}"
-    end
+    iproute_path ||= Puppet::Util.which('ip')
+    final_cmd = [iproute_path, '-json'] + args.flatten
+    context.debug("Executing command: #{final_cmd.join(' ')}")
+    response = Puppet::Util::Execution.execute(final_cmd, failonfail: true)
+  rescue Puppet::ExecutionFailure => e
+    # Surface the error as Pupper::Error with a more descriptive message to make failures easier to debug
+    raise Puppet::Error, "Command '#{args.join(' ')}' failed: #{e.message}"
   end
 end
-
