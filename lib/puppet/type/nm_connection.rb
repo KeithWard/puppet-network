@@ -138,7 +138,7 @@ Puppet::ResourceApi.register_type(
       default: nil,
     },
     slave_type: {
-      type: 'Optional[Enum["ethernet", "bridge", "bond", "vlan"]]',
+      type: 'Optional[Enum["bridge", "bond"]]',
       desc: 'The type of the slave connection. Required for bridge or bond connections, to specify the type of the slave device. If ommitted pupppet will try to guess the type based on the device name.',
       default: nil,
     },
@@ -205,13 +205,13 @@ Puppet::ResourceApi.register_type(
       default: 'manual',
     },
     ipv4_addresses: {
-      type: 'Optional[Variant[Stdlib::IP::Address::V4::CIDR,Array[Stdlib::IP::Address::V4::CIDR]]]',
+      type: 'Optional[Network::AddressList::CIDR]',
       desc: 'The IPv4 address of the connection either a single or an array for multiple addresses.',
       default: nil
     },
     ipv4_gateway: {
       type: 'Optional[Stdlib::IP::Address::V4::Nosubnet]',
-      desc: 'The IPv4 gateway for the connection, either a single or an array for multiple gateways.',
+      desc: 'The IPv4 gateway for the connection.',
       default: nil
     },
     ipv4_dns: {
@@ -233,7 +233,7 @@ Puppet::ResourceApi.register_type(
     # IPV6 configuration
     ipv6_method: {
       type: "Enum['auto', 'manual', 'link-local', 'disabled']",
-      desc: "Pv6 configuration method. Valid values are 'auto', 'manual', 'link-local', and 'disabled'.",
+      desc: "IPv6 configuration method. Valid values are 'auto', 'manual', 'link-local', and 'disabled'.",
       default: 'auto',
     },
     ipv6_addresses: {
@@ -243,7 +243,7 @@ Puppet::ResourceApi.register_type(
     },
     ipv6_gateway: {
       type: 'Optional[Stdlib::IP::Address::V6::Nosubnet]',
-      desc: 'The IPv6 gateway for the connection, either a single or an array for multiple gateways.',
+      desc: 'The IPv6 gateway for the connection.',
       default: nil,
     },
     ipv6_dns: {
@@ -285,7 +285,6 @@ Puppet::ResourceApi.register_type(
     bond_mode: {
       type: "Optional[Enum['balance-rr', 'active-backup', 'balance-xor', 'broadcast', '802.3ad', 'balance-tlb', 'balance-alb']]",
       desc: "The bonding mode for the connection. Valid values are 'balance-rr', 'active-backup', 'balance-xor', 'broadcast', '802.3ad', 'balance-tlb', and 'balance-alb'.",
-      default: 'balance-rr',
     },
     bond_primary: {
       type: 'Optional[String]',
